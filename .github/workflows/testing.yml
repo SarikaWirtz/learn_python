@@ -1,0 +1,67 @@
+name: Python Testing Demo - Automated Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: 🛒 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-html pytest-cov
+
+      - name: 🧪 Run tests with coverage
+        run: |
+          mkdir -p reports
+          pytest test_main.py -v \
+            --html=reports/test_report_python${{ matrix.python-version }}.html \
+            --self-contained-html \
+            --cov=main \
+            --cov-report=html:reports/coverage_python${{ matrix.python-version }} \
+            --cov-report=xml:reports/coverage_python${{ matrix.python-version }}.xml \
+            --junit-xml=reports/junit_python${{ matrix.python-version }}.xml
+
+      - name: 📊 Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-python${{ matrix.python-version }}
+          path: reports/
+          retention-days: 30
+
+  summary:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: 🎉 All tests completed
+        run: |
+          echo "## 🧪 Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python versions tested**: 3.9, 3.10, 3.11, 3.12" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reports**: Available in job artifacts" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.test.result }}" == "success" ]; then
+            echo "✅ All tests passed across all Python versions!"
+          else
+            echo "❌ Some tests failed. Check the individual job logs for details."
+          fi
